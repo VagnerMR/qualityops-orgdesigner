@@ -1,0 +1,44 @@
+import path from 'path';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig(({ mode }) => {
+  // Carrega variáveis de ambiente
+  const env = loadEnv(mode, process.cwd(), '');
+  
+  // Debug apenas em desenvolvimento
+  if (mode === 'development') {
+    console.log('🔧 Vite Config - Variáveis carregadas:');
+    console.log('   VITE_SUPABASE_URL:', env.VITE_SUPABASE_URL ? '✓' : '✗');
+    console.log('   VITE_SUPABASE_ANON_KEY:', env.VITE_SUPABASE_ANON_KEY ? '✓' : '✗');
+  }
+  
+  return {
+    server: {
+      port: 3000,
+      host: '0.0.0.0',
+    },
+    plugins: [react()],
+    css: {
+      postcss: path.resolve(__dirname, 'postcss.config.js'), // ← CAMINHO ABSOLUTO
+    },
+    define: {
+      'process.env': env,
+      'import.meta.env': env,
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      }
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          assetFileNames: 'assets/[name]-[hash][extname]',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js'
+        }
+      }
+    }
+  };
+});

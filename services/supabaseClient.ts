@@ -1,25 +1,21 @@
 import { createClient } from '@supabase/supabase-js'
 import { User, TeamMember, HistoryRecord, AISuggestion } from '../types'
 
-// SOLUÇÃO DE EMERGÊNCIA: Usar valores diretos se .env não carregar
+// CORREÇÃO: Remover referência a process.env
 const supabaseUrl = 
   import.meta.env?.VITE_SUPABASE_URL || 
-  process.env?.VITE_SUPABASE_URL ||
   'https://vbcocdeppatirbvfmnfl.supabase.co'; // VALOR DIRETO
 
 const supabaseKey = 
-  import.meta.env?.VITE_SUPABASE_ANON_KEY || 
-  process.env?.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZiY29jZGVwcGF0aXJidmZtbmZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4MTk2NjIsImV4cCI6MjA4MzM5NTY2Mn0.6t_qtIYdi0V3MLA96TRqofaR__reMbfDVgtDB5tSmgA'; // VALOR DIRETO
 
-// Debug aprimorado
+// Debug aprimorado (SEM process.env)
 console.log('🔧 Supabase Config - Debug:');
-console.log('   import.meta.env:', import.meta.env);
-console.log('   process.env:', process.env);
-console.log('   supabaseUrl final:', supabaseUrl ? '✓ ' + supabaseUrl.substring(0, 30) + '...' : '✗');
-console.log('   supabaseKey final:', supabaseKey ? '✓ (primeiros 10): ' + supabaseKey.substring(0, 10) + '...' : '✗');
-
-
+console.log('   import.meta.env presente:', !!import.meta.env);
+console.log('   supabaseUrl configurada:', !!supabaseUrl);
+console.log('   supabaseKey configurada:', !!supabaseKey);
+console.log('   Ambiente:', import.meta.env.MODE || 'development');
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ CREDENCIAIS SUPABASE NÃO ENCONTRADAS!');
@@ -300,7 +296,7 @@ export const userService = {
   getUsers: async (): Promise<User[]> => {
     try {
       const { data, error } = await supabase
-        .from('app_users')
+        .from('users')  // ← TABELA CORRETA: 'users'
         .select('*')
         .order('name')
       
@@ -358,7 +354,7 @@ export const testConnection = async () => {
     console.log('🔌 Testando conexão com Supabase...');
     
     const { data, error } = await supabase
-      .from('app_users')
+      .from('users')  // ← TABELA CORRETA: 'users'
       .select('count')
       .limit(1)
     
@@ -373,6 +369,16 @@ export const testConnection = async () => {
     console.error('❌ Erro inesperado:', err);
     return false;
   }
+};
+
+export const setupRealtime = (callback: (payload: any) => void) => {
+  return supabase
+    .channel('team_members_changes')
+    .on('postgres_changes', 
+      { event: '*', schema: 'public', table: 'team_members' }, 
+      callback
+    )
+    .subscribe();
 };
 
 // ===== DEBUG: Expor serviços globalmente (apenas desenvolvimento) =====
@@ -390,6 +396,7 @@ if (import.meta.env.DEV) {
   console.log('   - window.teamService');
   console.log('   - window.userService');
   console.log('   - window.historyService');
+
 }
 
 // Exportar o cliente direto se necessário

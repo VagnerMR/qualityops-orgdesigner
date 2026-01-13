@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { TeamMember, AISuggestion, User } from '../types';
-import { getTeamStructureSuggestions } from '../services/geminiService';
+import { getAISuggestions } from '../services/geminiService';
 
 interface SidebarProps {
   onAddMember: () => void;
@@ -21,9 +20,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onAddMember, onImportAI, onOpenHistor
   const handleAISuggestions = async () => {
     setLoading(true);
     try {
-      const result = await getTeamStructureSuggestions(size, industry, 'Qualidade ISO 9001 e Six Sigma');
+      const prompt = `Empresa do setor ${industry} de porte ${size}. Especializada em Qualidade ISO 9001 e Six Sigma`;
+      const result = await getAISuggestions(prompt);
       onImportAI(result);
     } catch (error) {
+      console.error('Erro ao buscar sugestões:', error);
       alert("Erro ao buscar sugestões da IA.");
     } finally {
       setLoading(false);

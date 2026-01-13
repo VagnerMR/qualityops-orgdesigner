@@ -1,45 +1,72 @@
+export interface AISuggestion {
+  role: string;
+  description: string;
+  responsibilities: string[];
+  suggestedLevel: string;
+}
 
-import { GoogleGenAI, Type } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
-export const getTeamStructureSuggestions = async (companySize: string, industry: string, focus: string) => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Sugira uma estrutura de equipe de qualidade ideal para uma empresa de porte ${companySize} no setor de ${industry} com foco em ${focus}. Forneça uma lista de papéis e suas principais responsabilidades.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            role: { type: Type.STRING },
-            description: { type: Type.STRING },
-            responsibilities: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            suggestedLevel: { type: Type.STRING }
-          },
-          required: ["role", "description", "responsibilities", "suggestedLevel"]
-        }
-      }
-    }
-  });
-
-  try {
-    return JSON.parse(response.text.trim());
-  } catch (e) {
-    console.error("Failed to parse AI response", e);
-    return [];
+// Dados mock para desenvolvimento
+const mockSuggestions: AISuggestion[] = [
+  {
+    role: 'Analista de Qualidade Pleno',
+    description: 'Responsável por análises estatísticas e relatórios de qualidade',
+    responsibilities: ['Análise SPC', 'Relatórios de não conformidade', 'Auditorias internas'],
+    suggestedLevel: 'Analista'
+  },
+  {
+    role: 'Técnico em Metrologia',
+    description: 'Especialista em calibração e medição dimensional',
+    responsibilities: ['Calibração de equipamentos', 'Análise de capacidade', 'Controle metrológico'],
+    suggestedLevel: 'Técnico'
+  },
+  {
+    role: 'Coordenador de Sistemas da Qualidade',
+    description: 'Coordena a implementação e manutenção do sistema de gestão da qualidade',
+    responsibilities: ['Gestão documental', 'Auditorias de sistema', 'Indicadores de desempenho'],
+    suggestedLevel: 'Coordenador'
+  },
+  {
+    role: 'Inspetor de Qualidade',
+    description: 'Realiza inspeções visuais e dimensionais em produtos',
+    responsibilities: ['Inspeção final', 'Controle dimensional', 'Registro de não conformidades'],
+    suggestedLevel: 'Inspetor'
+  },
+  {
+    role: 'Gerente de Melhoria Contínua',
+    description: 'Lidera projetos de melhoria e otimização de processos',
+    responsibilities: ['Gestão de projetos', 'Análise de processos', 'Implementação de melhorias'],
+    suggestedLevel: 'Gerente'
   }
+];
+
+export const getAISuggestions = async (prompt: string): Promise<AISuggestion[]> => {
+  console.log('🤖 [MOCK] Gerando sugestões baseadas em:', prompt.substring(0, 100));
+  
+  // Simula um delay de rede
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Retorna sugestões mock baseadas no prompt (filtra por palavras-chave)
+  const lowerPrompt = prompt.toLowerCase();
+  
+  if (lowerPrompt.includes('técnico') || lowerPrompt.includes('metrologia')) {
+    return mockSuggestions.filter(s => s.suggestedLevel === 'Técnico');
+  }
+  
+  if (lowerPrompt.includes('analista') || lowerPrompt.includes('qualidade')) {
+    return mockSuggestions.filter(s => s.suggestedLevel === 'Analista');
+  }
+  
+  if (lowerPrompt.includes('coordenador') || lowerPrompt.includes('sistema')) {
+    return mockSuggestions.filter(s => s.suggestedLevel === 'Coordenador');
+  }
+  
+  // Retorna todas por padrão
+  return [...mockSuggestions];
 };
 
-export const generateJobDescription = async (role: string) => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Gere uma descrição de cargo detalhada para um "${role}" em uma equipe de qualidade, incluindo requisitos técnicos e comportamentais.`,
-  });
-  return response.text;
+export const testAIConnection = async () => {
+  return { 
+    success: true, 
+    message: 'Modo de desenvolvimento ativo - usando dados simulados' 
+  };
 };

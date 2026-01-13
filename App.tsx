@@ -51,35 +51,29 @@ const App: React.FC = () => {
   // Função auxiliar para determinar o nível com base no cargo
   const getRoleLevel = (role: string): number => {
     if (!role) return 5;
-  
+
     const r = role.toLowerCase().trim();
-  
-    // DEBUG: Log para ver como está classificando
-    console.log(`🎯 Classificando: "${role}" → "${r}"`);
-  
+
     if (r.includes('gerente')) {
-      console.log(`   → Nível 0 (Gerente)`);
-      return 0;
+      return 0;  // Gerente
     }
     if (r.includes('coordenador')) {
-      console.log(`   → Nível 1 (Coordenador)`);
-      return 1;
+      return 1;  // Coordenador
     }
     if (r.includes('analista')) {
-      console.log(`   → Nível 2 (Analista)`);
-      return 2;
+      return 2;  // Analista
     }
     if (r.includes('técnico') || r.includes('tecnico') || r.includes('tec')) {
-      console.log(`   → Nível 3 (Técnico)`);
-      return 3;
+      return 3;  // Técnico (ANTES ERA 4)
     }
     if (r.includes('inspetor') || r.includes('atendente')) {
-      console.log(`   → Nível 4 (Inspetor)`);
-      return 4;
+      return 4;  // Inspetor (ANTES ERA 3)
     }
-  
-    console.log(`   → Nível 5 (Outros)`);
-    return 5;
+    if (r.includes('inspetor') || r.includes('atendente')) {
+      return 4;  // Inspetor (ANTES ERA 3)
+    }
+
+    return 5;  // Outros/Admin
   };
 
   // Filtragem dos membros baseada no usuário logado e no nível de visualização
@@ -123,59 +117,26 @@ const App: React.FC = () => {
     return members.filter(m => finalSet.has(m.id));
   }, [members, currentUser, maxVisibleLevel]);
 
-
-  // DEBUG: Logs de diagnóstico
-  useEffect(() => {
-    console.log('🔍 [DEBUG] App montado');
-    console.log('  currentUser:', currentUser?.name);
-    console.log('  members:', members.length);
-    console.log('  filteredMembers:', filteredMembers.length);
-    console.log('  loading:', loading); 
-  }, []);
-
-  useEffect(() => {
-    console.log('🔍 [DEBUG] filteredMembers atualizado:', filteredMembers.length);
-  
-    if (filteredMembers.length > 0) {
-      console.log('  Primeiros 3 filteredMembers:');
-      filteredMembers.slice(0, 3).forEach(m => {
-        console.log(`    ${m.id}: parentId = ${m.parentId} (${typeof m.parentId})`);
-      });
-    
-      // Verificar problemas
-      const nullParents = filteredMembers.filter(m => !m.parentId);
-      console.log(`  Membros com parentId null: ${nullParents.length}`);
-      nullParents.forEach(m => console.log(`    - ${m.id}: ${m.name}`));
-    }
-  }, [filteredMembers]);
-
   // CARREGAR DADOS DO SUPABASE
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
 
       try {
-        console.log('📥 [1] Iniciando loadData...');
-    
         // 1. Verificar sessão local (para login automático)
         const savedSession = localStorage.getItem('qualityops_session');
-        console.log('📥 [2] Sessão salva:', savedSession ? 'SIM' : 'NÃO');
-    
         if (savedSession) {
           try {
             const user = JSON.parse(savedSession);
-            console.log('📥 [3] Usuário da sessão:', user.name);
-        
+            // Verificar se o usuário ainda existe no banco
             const { data: userData } = await userService.getUsers();
-            console.log('📥 [4] Usuários do banco:', userData?.length || 0);
 
+            // CORREÇÃO: Verificar se userData existe e é array
             if (userData && Array.isArray(userData)) {
               const validUser = userData.find(u => u.id === user.id);
               if (validUser) {
-                console.log('📥 [5] Usuário válido encontrado:', validUser.name);
                 setCurrentUser(validUser);
               } else {
-                console.log('📥 [5] Usuário não encontrado no banco');
                 localStorage.removeItem('qualityops_session');
               }
             }
@@ -186,59 +147,49 @@ const App: React.FC = () => {
         }
 
         // 2. Carregar membros da equipe
-        console.log('📥 [6] Carregando membros...');
         const membersData = await teamService.getAllMembers();
-        console.log(`📥 [7] ${membersData.length} membros carregados`);
-        setMembers(membersData);
-        setLastSavedMembers(membersData);
+        setMembers(membersData || []); // Garantir array
+        setLastSavedMembers(membersData || []);
 
         // 3. Carregar usuários
-        console.log('📥 [8] Carregando usuários...');
         const usersData = await userService.getUsers();
-        console.log(`📥 [9] ${usersData.length} usuários carregados`);
-        setUsers(usersData);
+        setUsers(usersData || []); // Garantir array
 
         // 4. Carregar histórico
-        console.log('📥 [10] Carregando histórico...');
         const historyData = await historyService.getHistory(50);
-        console.log(`📥 [11] ${historyData.length} registros de histórico`);
-        if (historyData.length > 0) {
+        if (historyData && Array.isArray(historyData)) {
           setHistory(historyData);
         }
 
-        console.log('📥 [12] LoadData COMPLETO!');
+        // 5. Carregar logo (do localStorage por enquanto)
+        const savedLogo = localStorage.getItem('qualityops_logo');
+        if (savedLogo) {
+          setCompanyLogo(savedLogo);
+        }
+
       } catch (error) {
-        console.error('❌ Erro ao carregar dados:', error);
-        alert('Erro ao conectar com o banco de dados. Verifique a conexão.');
+        console.error('Erro ao carregar dados:', error);
+        // Não mostrar alerta para evitar popups
+        console.log('⚠️  Carregando dados iniciais do localStorage...');
+
+        // Fallback para dados locais
+        const savedMembers = localStorage.getItem('qualityops_members');
+        if (savedMembers) {
+          try {
+            const parsed = JSON.parse(savedMembers);
+            setMembers(parsed);
+            setLastSavedMembers(parsed);
+          } catch (e) {
+            console.error('Erro ao carregar fallback:', e);
+          }
+        }
       } finally {
         setLoading(false);
-        console.log('📥 [13] Loading: false');
       }
     };
+
     loadData();
   }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      console.log('📡 Iniciando sincronização em tempo real...');
-    
-      const subscription = setupRealtime((payload) => {
-        console.log('🔔 Mudança em tempo real:', payload);
-        // Recarregar membros
-        teamService.getAllMembers().then(members => {
-          console.log('🔄 Membros atualizados via realtime:', members.length);
-          setMembers(members);
-        });
-      });
-    
-      // Limpeza ao desmontar
-      return () => {
-        console.log('📡 Encerrando sincronização em tempo real...');
-        subscription.unsubscribe();
-      };
-    }
-  }, [currentUser]);
-
 
   const addHistoryRecord = async (action: HistoryRecord['action'], details: string) => {
     const newRecord: Omit<HistoryRecord, 'id'> = {
@@ -443,48 +394,6 @@ const App: React.FC = () => {
     setIsEditing(true);
   };
 
-    // CORREÇÃO FINAL: Garantir dados corretos para OrgChart
-/*
-  const membersParaOrgChart = useMemo(() => {
-    console.log('🔍 [DEBUG] membersParaOrgChart executando...');
-    console.log(`  filteredMembers.length: ${filteredMembers.length}`);
-  
-    if (!filteredMembers.length) {
-      console.log('  ❌ filteredMembers vazio!');
-      return [];
-    }
-  
-    // 1. Copiar array
-    const members = [...filteredMembers];
-  
-    // 2. Garantir que apenas paulo-h tenha parentId = null
-    const corrigidos = members.map(m => {
-      // Se for paulo-h, garantir null
-      if (m.id === 'paulo-h') {
-        console.log(`    ✅ ${m.id}: Forçando parentId = null`);
-        return { ...m, parentId: null };
-      }
-    
-      // Se não tem parentId ou é string vazia, definir como paulo-h
-      if (!m.parentId || m.parentId === '' || m.parentId === 'null') {
-        console.log(`    ⚠️  ${m.id}: parentId "${m.parentId}" → "paulo-h"`);
-        return { ...m, parentId: 'paulo-h' };
-      }
-    
-      return m;
-    });
-  
-    // Log final
-    console.log(`  ✅ Retornando ${corrigidos.length} membros corrigidos`);
-  
-    const roots = corrigidos.filter(m => !m.parentId);
-    console.log(`  Raízes: ${roots.length} (${roots.map(r => r.name).join(', ')})`);
-  
-    return corrigidos;
-  }, [filteredMembers]);
-*/
-
-
   if (loading) {
     return (
       <div className="fixed inset-0 bg-slate-900 flex items-center justify-center">
@@ -560,8 +469,8 @@ const App: React.FC = () => {
                 <option value={0}>Até Gerentes</option>
                 <option value={1}>Até Coordenadores</option>
                 <option value={2}>Até Analistas</option>
-                <option value={3}>Até Técnicos</option>
-                <option value={4}>Até Inspetores</option>
+                <option value={3}>Até Técnicos</option>   {/* ANTES: Até Inspetores */}
+                <option value={4}>Até Inspetores</option> {/* ANTES: Até Técnicos */}
               </select>
               <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
             </div>
@@ -665,8 +574,8 @@ const App: React.FC = () => {
                   <div key={record.id} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative group hover:shadow-xl transition-all">
                     <div className="flex justify-between items-start mb-4">
                       <span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full ${record.action_type === 'Adição' ? 'bg-emerald-50 text-emerald-600' :
-                          record.action_type === 'Edição' ? 'bg-blue-50 text-blue-600' :
-                            record.action_type === 'Cadastro Usuário' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
+                        record.action_type === 'Edição' ? 'bg-blue-50 text-blue-600' :
+                          record.action_type === 'Cadastro Usuário' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
                         }`}>
                         {record.action_type}
                       </span>
@@ -703,7 +612,6 @@ const App: React.FC = () => {
           departments={availableDepartments}
         />
       )}
-
     </div>
   );
 };
