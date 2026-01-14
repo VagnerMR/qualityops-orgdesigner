@@ -2,11 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 import { User, TeamMember, HistoryRecord, AISuggestion } from '../types'
 
 // CORREÇÃO: Remover referência a process.env
-const supabaseUrl = 
-  import.meta.env?.VITE_SUPABASE_URL || 
+const supabaseUrl =
+  import.meta.env?.VITE_SUPABASE_URL ||
   'https://vbcocdeppatirbvfmnfl.supabase.co'; // VALOR DIRETO
 
-const supabaseKey = 
+const supabaseKey =
   import.meta.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZiY29jZGVwcGF0aXJidmZtbmZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4MTk2NjIsImV4cCI6MjA4MzM5NTY2Mn0.6t_qtIYdi0V3MLA96TRqofaR__reMbfDVgtDB5tSmgA'; // VALOR DIRETO
 
@@ -32,27 +32,32 @@ export const authService = {
   login: async (username: string, password: string): Promise<User | null> => {
     try {
       console.log('🔑 Tentando login para:', username);
-    
-      // Buscar pelo username (que agora é igual ao id)
+
+      // Buscar pelo username
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('username', username.toLowerCase())
         .eq('password', password)
         .maybeSingle();
-    
+
       if (error) {
         console.error('❌ Erro no login:', error.message);
         return null;
       }
-    
+
       if (!data) {
         console.log('❌ Usuário não encontrado ou senha incorreta');
         return null;
       }
-    
+
       console.log('✅ Login bem-sucedido:', data.name);
-    
+      console.log('📊 Campo needs_password_change do banco:', data.needs_password_change);
+
+      const needsPasswordChange = data.needs_password_change !== undefined
+        ? data.needs_password_change
+        : true;
+
       // Converter para formato da aplicação
       const user: User = {
         id: data.id,  // Agora será 'admin', 'paulo', etc.
@@ -61,11 +66,11 @@ export const authService = {
         email: data.email || '',
         role: (data.role as UserRole) || 'Coordenador',
         departments: data.departments || [],
-        needsPasswordChange: data.needs_password_change || true,
+        needsPasswordChange: needsPasswordChange,
         password: data.password
       };
-    
-      console.log('👤 Usuário convertido:', user);
+
+      console.log('👤 Usuário convertido - Precisa trocar senha?', user.needsPasswordChange);
       return user;
     } catch (error) {
       console.error('❌ Exception no login:', error);
@@ -76,21 +81,21 @@ export const authService = {
   updatePassword: async (username: string, newPassword: string): Promise<boolean> => {
     try {
       console.log('🔐 Atualizando senha para:', username);
-    
+
       const { error } = await supabase
         .from('users')
-        .update({ 
+        .update({
           password: newPassword,
           needs_password_change: false,
           updated_at: new Date().toISOString()
         })
         .eq('username', username.toLowerCase());
-    
+
       if (error) {
         console.error('❌ Erro ao atualizar senha:', error);
         return false;
       }
-    
+
       console.log('✅ Senha atualizada com sucesso');
       return true;
     } catch (error) {
@@ -104,19 +109,19 @@ export const teamService = {
   getAllMembers: async (): Promise<TeamMember[]> => {
     try {
       console.log('🔍 [DEBUG] Buscando todos os membros do Supabase...');
-    
+
       const { data, error } = await supabase
         .from('team_members')
         .select('*')
         .order('department');
-    
+
       if (error) {
         console.error('❌ Erro ao buscar membros:', error);
         return [];
       }
-    
+
       console.log(`✅ ${data?.length || 0} registros brutos do banco`);
-    
+
       // DEBUG DETALHADO - Primeiros 5 registros
       if (data && data.length > 0) {
         console.log('📋 Dados brutos (amostra):');
@@ -124,12 +129,12 @@ export const teamService = {
           console.log(`  [${i}] ${m.id}: "${m.name}" → parent_id: ${m.parent_id} (${typeof m.parent_id})`);
         });
       }
-    
+
       // CONVERSÃO CORRETA
       const convertedMembers: TeamMember[] = (data || []).map(member => {
         // IMPORTANTE: parentId deve ser string ou null
         let parentId: string | null = null;
-      
+
         if (member.parent_id === null || member.parent_id === undefined) {
           parentId = null;
         } else if (member.parent_id === '') {
@@ -137,7 +142,7 @@ export const teamService = {
         } else {
           parentId = String(member.parent_id); // Converter para string
         }
-      
+
         const converted: TeamMember = {
           id: member.id,
           name: member.name,
@@ -151,20 +156,20 @@ export const teamService = {
           created_at: member.created_at,
           updated_at: member.updated_at
         };
-      
+
         return converted;
       });
-    
+
       // DEBUG DA CONVERSÃO
       console.log('🔄 Membros convertidos (amostra):');
       convertedMembers.slice(0, 5).forEach((m, i) => {
         console.log(`  [${i}] ${m.id} → parentId: ${m.parentId} (${typeof m.parentId})`);
       });
-    
+
       // Verificar paulo-h especificamente
       const pauloH = convertedMembers.find(m => m.id === 'paulo-h');
       console.log(`👑 Paulo H: parentId = ${pauloH?.parentId} (deve ser null)`);
-    
+
       return convertedMembers;
     } catch (error) {
       console.error('❌ Exception ao buscar membros:', error);
@@ -196,7 +201,7 @@ export const teamService = {
         .maybeSingle();
 
       let result;
-    
+
       if (existing) {
         // UPDATE se já existe
         result = await supabase
@@ -218,7 +223,7 @@ export const teamService = {
         console.error('Erro ao salvar membro:', result.error);
         return null;
       }
-    
+
       // Converter parent_id → parentId para a aplicação
       return {
         ...result.data,
@@ -236,7 +241,7 @@ export const teamService = {
         .from('team_members')
         .delete()
         .eq('id', id)
-      
+
       if (error) {
         console.error('Erro ao excluir membro:', error);
         return false;
@@ -256,11 +261,11 @@ export const historyService = {
         ...record,
         id: Math.random().toString(36).substr(2, 9)
       };
-      
+
       const { error } = await supabase
         .from('history_log')
         .insert([recordWithId])
-      
+
       if (error) {
         console.error('Erro ao adicionar histórico:', error);
         return false;
@@ -279,7 +284,7 @@ export const historyService = {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(limit)
-      
+
       if (error) {
         console.error('Erro ao buscar histórico:', error);
         return [];
@@ -299,7 +304,7 @@ export const userService = {
         .from('users')  // ← TABELA CORRETA: 'users'
         .select('*')
         .order('name')
-      
+
       if (error) {
         console.error('Erro ao buscar usuários:', error);
         return [];
@@ -316,12 +321,12 @@ export const userService = {
       if (user.id) {
         // Update
         const { data, error } = await supabase
-          .from('app_users')
+          .from('users')
           .update(user)
           .eq('id', user.id)
           .select()
           .single()
-        
+
         if (error) {
           console.error('Erro ao atualizar usuário:', error);
           return null;
@@ -330,11 +335,11 @@ export const userService = {
       } else {
         // Insert
         const { data, error } = await supabase
-          .from('app_users')
+          .from('users')
           .insert([user])
           .select()
           .single()
-        
+
         if (error) {
           console.error('Erro ao criar usuário:', error);
           return null;
@@ -352,17 +357,17 @@ export const userService = {
 export const testConnection = async () => {
   try {
     console.log('🔌 Testando conexão com Supabase...');
-    
+
     const { data, error } = await supabase
       .from('users')  // ← TABELA CORRETA: 'users'
       .select('count')
       .limit(1)
-    
+
     if (error) {
       console.error('❌ Erro de conexão:', error.message);
       return false;
     }
-    
+
     console.log('✅ Conexão estabelecida com sucesso!');
     return true;
   } catch (err) {
@@ -374,8 +379,8 @@ export const testConnection = async () => {
 export const setupRealtime = (callback: (payload: any) => void) => {
   return supabase
     .channel('team_members_changes')
-    .on('postgres_changes', 
-      { event: '*', schema: 'public', table: 'team_members' }, 
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'team_members' },
       callback
     )
     .subscribe();
@@ -389,7 +394,7 @@ if (import.meta.env.DEV) {
   (window as any).teamService = teamService;
   (window as any).userService = userService;
   (window as any).historyService = historyService;
-  
+
   console.log('🔧 Serviços expostos globalmente (apenas dev):');
   console.log('   - window.supabase');
   console.log('   - window.authService');
