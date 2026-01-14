@@ -425,7 +425,7 @@ const App: React.FC = () => {
             </div>
             <div className="flex flex-col">
               <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">
-                {currentUser.role !== 'Admin' && currentUser.departments[0] !== '*' ? currentUser.departments.join(' & ') : 'Engenharia de Qualidade'}
+                QualityOps
               </h1>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-black bg-slate-100 px-3 py-1 rounded-full text-slate-500 uppercase tracking-widest">

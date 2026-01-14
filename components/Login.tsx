@@ -56,9 +56,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="w-20 h-20 bg-orange-500 rounded-[28px] flex items-center justify-center text-white shadow-2xl shadow-orange-500/20 mb-6">
               <i className="fa-solid fa-users-viewfinder text-3xl"></i>
             </div>
-            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter text-center leading-none">
-              QualityOps<br/>
-              <span className="text-orange-500 text-lg tracking-widest">OrgDesigner</span>
+            <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter text-center leading-none">
+              Viemar<br/>
+              <span class="text-orange-500 text-lg tracking-widest">SmartOrg</span>
             </h1>
             <p className="text-slate-400 text-xs font-bold text-center mt-4 px-6">
               {loading ? 'Conectando ao banco de dados...' : 'Use suas credenciais para acessar o sistema'}

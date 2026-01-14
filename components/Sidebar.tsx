@@ -41,8 +41,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onAddMember, onImportAI, onOpenHistor
         </div>
         <div>
           <h2 className="text-lg font-black text-slate-800 leading-none tracking-tight">
-            QualityOps
-          </h2>
+  	    Viemar SmartOrg
+	  </h2>
           <p className="text-[10px] text-slate-400 mt-1 font-black uppercase tracking-[0.2em]">v2.0 Beta</p>
         </div>
       </div>
