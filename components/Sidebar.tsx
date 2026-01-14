@@ -78,50 +78,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onAddMember, onImportAI, onOpenHistor
             Gestão de Usuários
           </button>
         )}
-
-        <div className={`pt-10 border-t mt-6 transition-opacity duration-300 ${!isEditing ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-              <i className="fa-solid fa-sparkles"></i>
-            </div>
-            <h3 className="font-black text-slate-800 text-[11px] uppercase tracking-widest">Assistente IA</h3>
-          </div>
-          
-          <div className="space-y-5">
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 px-1">Indústria</label>
-              <select 
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                className="w-full border-2 border-slate-50 rounded-xl px-4 py-3 text-sm font-bold focus:border-indigo-500 outline-none transition-all appearance-none bg-slate-50"
-              >
-                <option>Manufatura</option>
-                <option>Software / SaaS</option>
-                <option>Farmacêutico</option>
-                <option>Automotivo</option>
-                <option>Alimentício</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleAISuggestions}
-              disabled={loading || !isEditing}
-              className={`w-full text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 font-black py-4 px-4 rounded-2xl flex items-center justify-center gap-3 transition-all uppercase text-[10px] tracking-widest ${loading ? 'opacity-50' : 'active:scale-95 shadow-lg shadow-indigo-500/10'}`}
-            >
-              {loading ? (
-                <>
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  Analisando...
-                </>
-              ) : (
-                <>
-                  <i className="fa-solid fa-microchip"></i>
-                  Sugerir Estrutura
-                </>
-              )}
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="pt-10 border-t mt-auto space-y-4">

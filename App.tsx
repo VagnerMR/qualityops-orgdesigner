@@ -50,30 +50,13 @@ const App: React.FC = () => {
 
   // Função auxiliar para determinar o nível com base no cargo
   const getRoleLevel = (role: string): number => {
-    if (!role) return 5;
-
-    const r = role.toLowerCase().trim();
-
-    if (r.includes('gerente')) {
-      return 0;  // Gerente
-    }
-    if (r.includes('coordenador')) {
-      return 1;  // Coordenador
-    }
-    if (r.includes('analista')) {
-      return 2;  // Analista
-    }
-    if (r.includes('técnico') || r.includes('tecnico') || r.includes('tec')) {
-      return 3;  // Técnico (ANTES ERA 4)
-    }
-    if (r.includes('inspetor') || r.includes('atendente')) {
-      return 4;  // Inspetor (ANTES ERA 3)
-    }
-    if (r.includes('inspetor') || r.includes('atendente')) {
-      return 4;  // Inspetor (ANTES ERA 3)
-    }
-
-    return 5;  // Outros/Admin
+    const r = role.toLowerCase();
+    if (r.includes('gerente')) return 0;
+    if (r.includes('coordenador')) return 1;
+    if (r.includes('analista')) return 2;
+    if (r.includes('técnico') || r.includes('tecnico') || r.includes('tec ')) return 3; // ↑ Acima dos inspetores
+    if (r.includes('inspetor') || r.includes('atendente')) return 4; // ↓ Abaixo dos técnicos
+    return 5;
   };
 
   // Filtragem dos membros baseada no usuário logado e no nível de visualização

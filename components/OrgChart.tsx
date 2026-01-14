@@ -25,12 +25,12 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
 
   // Função auxiliar para determinar o nível com base no cargo
   const getRoleLevel = (role: string): number => {
-    const r = role.toLowerCase();
+  const r = role.toLowerCase();
     if (r.includes('gerente')) return 0;
     if (r.includes('coordenador')) return 1;
     if (r.includes('analista')) return 2;
-    if (r.includes('tec')) return 3;
-    if (r.includes('inspetor') || r.includes('atendente')) return 4;
+    if (r.includes('técnico') || r.includes('tecnico') || r.includes('tec ')) return 3;  // ← TÉCNICOS
+    if (r.includes('inspetor') || r.includes('atendente')) return 4;  // ← INSPETORES
     return 5;
   };
 
