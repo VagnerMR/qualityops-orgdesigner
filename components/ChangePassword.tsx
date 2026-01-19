@@ -15,7 +15,7 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, onComplete }) => 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword.length < 4) {
       setError('A senha deve ter pelo menos 4 caracteres.');
       return;
@@ -29,15 +29,10 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, onComplete }) => 
     setError('');
 
     try {
-      // Atualizar senha no Supabase
+      // Atualizar senha no Supabase (já define needs_password_change: false)
       const success = await authService.updatePassword(user.username, newPassword);
-      
+
       if (success) {
-        // Manter compatibilidade com localStorage
-        const savedPasswords = JSON.parse(localStorage.getItem('qualityops_passwords') || '{}');
-        savedPasswords[user.username] = newPassword;
-        localStorage.setItem('qualityops_passwords', JSON.stringify(savedPasswords));
-        
         onComplete();
       } else {
         setError('Erro ao atualizar senha no servidor. Tente novamente.');
@@ -59,7 +54,7 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, onComplete }) => 
               <i className="fa-solid fa-key text-3xl"></i>
             </div>
             <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter text-center leading-tight">
-              {loading ? 'Atualizando...' : 'Primeiro Acesso'}<br/>
+              {loading ? 'Atualizando...' : 'Primeiro Acesso'}<br />
               <span className="text-indigo-500 text-sm tracking-[0.2em]">Troca de Senha Obrigatória</span>
             </h2>
             <p className="text-slate-400 text-xs font-bold text-center mt-4 px-6">

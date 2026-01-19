@@ -48,6 +48,12 @@ const App: React.FC = () => {
     return [...defaultUsersFromDB, ...customUsers];
   }, [users]);
 
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as any).currentUser = currentUser;
+    }
+  }, [currentUser]);
+
   // Função auxiliar para determinar o nível com base no cargo
   const getRoleLevel = (role: string): number => {
     const r = role.toLowerCase();
@@ -59,46 +65,125 @@ const App: React.FC = () => {
     return 5;
   };
 
+  // Nova função: verificar se membro está na subárvore do usuário
+  const isInSubtree = (memberId: string, managerId: string, allMembers: TeamMember[]): boolean => {
+    if (memberId === managerId) return true;
+
+    let current = allMembers.find(m => m.id === memberId);
+    let depth = 0;
+    const maxDepth = 10; // Prevenir loop infinito
+
+    while (current && current.parentId && depth < maxDepth) {
+      if (current.parentId === managerId) return true;
+      current = allMembers.find(m => m.id === current.parentId);
+      depth++;
+    }
+    return false;
+  };
+
+  // Nova função: verificar permissões para editar membro
+  const canEditMember = (member: TeamMember | null, currentUser: User): boolean => {
+    if (!currentUser) return false;
+
+    // Admin pode tudo
+    if (currentUser.role === 'Admin') return true;
+
+    // Gerente pode editar todos do departamento
+    if (currentUser.role === 'Gerente') {
+      if (!member) return true; // Adicionar novo
+      return currentUser.departments.includes('*') ||
+        currentUser.departments.includes(member.department);
+    }
+
+    // Coordenador só pode editar sua sub-árvore
+    if (currentUser.role === 'Coordenador') {
+      if (!member) return true; // Pode adicionar subordinados
+
+      // Verificar se o membro está na hierarquia do coordenador
+      return isInSubtree(member.id, currentUser.id, members);
+    }
+
+    return false;
+  };
+
+  if (import.meta.env.DEV) {
+    (window as any).canEditMember = canEditMember;
+    (window as any).isInSubtree = isInSubtree;
+    // currentUser será atualizado quando mudar
+  }
+
   // Filtragem dos membros baseada no usuário logado e no nível de visualização
   const filteredMembers = useMemo(() => {
     if (!currentUser) return [];
 
-    // 1. Filtragem por Nível de Visualização
+    // 1. Filtragem por Nível de Visualização (mantém)
     let visibleByLevel = members.filter(m => getRoleLevel(m.role) <= maxVisibleLevel);
 
-    // 2. Filtragem por Departamento (Acesso do Usuário)
-    if (currentUser.role === 'Admin' || currentUser.departments.includes('*')) {
+    // 2. NOVA LÓGICA: Hierarquia por role
+    if (currentUser.role === 'Admin') {
+      // Admin vê tudo
       return visibleByLevel;
     }
 
-    // Para usuários com departamentos restritos
-    const targetDepartmentMembers = visibleByLevel.filter(m =>
-      currentUser.departments.includes(m.department)
-    );
-
-    const finalSet = new Set<string>();
-    targetDepartmentMembers.forEach(m => finalSet.add(m.id));
-
-    // Função para coletar todos os pais de forma recursiva
-    const addAncestors = (memberId: string | null) => {
-      if (!memberId) return;
-      const member = members.find(m => m.id === memberId);
-      if (member) {
-        finalSet.add(member.id);
-        if (member.parentId) {
-          addAncestors(member.parentId);
-        }
+    if (currentUser.role === 'Gerente') {
+      // Gerente vê todos do(s) seu(s) departamento(s)
+      if (currentUser.departments.includes('*')) {
+        return visibleByLevel;
       }
+      return visibleByLevel.filter(m =>
+        currentUser.departments.includes(m.department)
+      );
+    }
+
+    if (currentUser.role === 'Coordenador') {
+      // Coordenador vê toda sua SUB-ÁRVORE
+      const getUserSubtree = (userId: string): TeamMember[] => {
+        const result = new Set<string>();
+
+        // Função recursiva para coletar subordinados
+        const collectSubordinates = (managerId: string) => {
+          result.add(managerId);
+
+          // Encontrar subordinados diretos
+          const directSubordinates = visibleByLevel.filter(m => m.parentId === managerId);
+
+          // Para cada subordinado, coletar seus subordinados também
+          directSubordinates.forEach(sub => {
+            collectSubordinates(sub.id);
+          });
+        };
+
+        // Começar do coordenador
+        collectSubordinates(userId);
+
+        // Retornar todos os membros da sub-árvore
+        return visibleByLevel.filter(m => result.has(m.id));
+      };
+
+      return getUserSubtree(currentUser.id);
+    }
+
+    // Para outros roles (Analista, Visualizador) - ver apenas si mesmo?
+    return visibleByLevel.filter(m => m.id === currentUser.id);
+  }, [members, currentUser, maxVisibleLevel]);
+
+  // Função auxiliar: coletar todos os IDs de uma sub-árvore
+  const getSubtreeIds = (rootId: string, allMembers: TeamMember[]): Set<string> => {
+    const ids = new Set<string>();
+
+    const traverse = (currentId: string) => {
+      ids.add(currentId);
+
+      // Encontrar filhos diretos
+      const children = allMembers.filter(m => m.parentId === currentId);
+
+      // Percorrer cada filho
+      children.forEach(child => traverse(child.id));
     };
 
-    targetDepartmentMembers.forEach(m => {
-      if (m.parentId) {
-        addAncestors(m.parentId);
-      }
-    });
-
-    return members.filter(m => finalSet.has(m.id));
-  }, [members, currentUser, maxVisibleLevel]);
+    traverse(rootId);
+    return ids;
+  };
 
   // CARREGAR DADOS DO SUPABASE
   useEffect(() => {
@@ -210,6 +295,10 @@ const App: React.FC = () => {
 
   const handleAddMember = () => {
     if (!isEditing) return;
+    if (!canEditMember(null, currentUser)) {
+      alert('Você não tem permissão para adicionar integrantes');
+      return;
+    }
     setModalMode('add');
     setSelectedMember(null);
     setIsModalOpen(true);
@@ -217,6 +306,10 @@ const App: React.FC = () => {
 
   const handleEditMember = (member: TeamMember) => {
     if (!isEditing) return;
+    if (!canEditMember(member, currentUser)) {
+      alert('Você não tem permissão para editar este integrante');
+      return;
+    }
     setModalMode('edit');
     setSelectedMember(member);
     setIsModalOpen(true);
@@ -224,6 +317,11 @@ const App: React.FC = () => {
 
   const handleAddSubordinate = (parentId: string) => {
     if (!isEditing) return;
+    const parentMember = members.find(m => m.id === parentId);
+    if (!parentMember || !canEditMember(parentMember, currentUser)) {
+      alert('Você não tem permissão para adicionar subordinados aqui');
+      return;
+    }
     setModalMode('add');
     setSelectedMember({ parentId } as any);
     setIsModalOpen(true);
@@ -238,12 +336,16 @@ const App: React.FC = () => {
         newMembers = members.map(m => m.id === savedMember.id ? savedMember : m);
         await addHistoryRecord('Edição', `Atualizado integrante: ${savedMember.name}`);
       } else {
-        newMembers = [...members, savedMember];
+        newMembers = [...members, savedMember]; // ← AQUI: adiciona ao array
         await addHistoryRecord('Adição', `Adicionado integrante: ${savedMember.name}`);
       }
 
-      setMembers(newMembers);
+      setMembers(newMembers); // ← AQUI: atualiza o estado
       setIsModalOpen(false);
+
+      // DEBUG: Verificar se atualizou
+      console.log('🔄 Novo membro adicionado ao estado:', savedMember.name);
+      console.log('   Total de membros agora:', newMembers.length);
 
       // Atualizar histórico local
       const historyData = await historyService.getHistory(50);
@@ -291,9 +393,10 @@ const App: React.FC = () => {
 
   const handleLogin = async (user: User) => {
     setCurrentUser(user);
-    if (!user.needsPasswordChange) {
-      localStorage.setItem('qualityops_session', JSON.stringify(user));
-    }
+
+    // ⬇⬇⬇ CORREÇÃO: Simplesmente salvar, a verificação será no render ⬇⬇⬇
+    // O App.tsx JÁ TEM a verificação nas linhas 264-268
+    localStorage.setItem('qualityops_session', JSON.stringify(user));
 
     // Registrar login no histórico
     await addHistoryRecord('Login', `Usuário ${user.name} fez login`);
@@ -376,6 +479,15 @@ const App: React.FC = () => {
     await addHistoryRecord('Importação IA', 'Novos papéis sugeridos pela inteligência artificial');
     setIsEditing(true);
   };
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as any).members = members;
+      (window as any).maxVisibleLevel = maxVisibleLevel;
+      (window as any).filteredMembers = filteredMembers;
+      (window as any).availableDepartments = availableDepartments;
+    }
+  }, [members, maxVisibleLevel, filteredMembers, availableDepartments]);
 
   if (loading) {
     return (
@@ -584,6 +696,7 @@ const App: React.FC = () => {
           onDelete={handleDeleteMember}
           onClose={() => setIsModalOpen(false)}
           isEditing={isEditing}
+          currentUser={currentUser}
         />
       )}
 

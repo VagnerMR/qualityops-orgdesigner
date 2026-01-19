@@ -44,7 +44,7 @@ export interface HistoryRecord {
   member_count: number;
   timestamp: string;
   created_at?: string;
-  
+
   // Aliases para compatibilidade com código antigo
   action?: 'Adição' | 'Edição' | 'Exclusão' | 'Importação IA' | 'Login' | 'Cadastro Usuário' | 'Troca de Senha';
   memberCount?: number;

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { TeamMember } from '../types';
+import { TeamMember, User } from '../types';
 
 interface MemberModalProps {
   member: Partial<TeamMember> | null;
@@ -9,16 +9,25 @@ interface MemberModalProps {
   onDelete?: (id: string) => void;
   onClose: () => void;
   isEditing: boolean;
+  currentUser: User | null;
 }
 
-const MemberModal: React.FC<MemberModalProps> = ({ member, allMembers, onSave, onDelete, onClose, isEditing }) => {
+const MemberModal: React.FC<MemberModalProps> = ({
+  member,
+  allMembers,
+  onSave,
+  onDelete,
+  onClose,
+  isEditing,
+  currentUser  // ← apenas esta linha, sem nada depois
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Partial<TeamMember>>({
     name: '',
     role: '',
     email: '',
-    department: '',
-    parentId: null,
+    department: currentUser?.departments[0] || 'Engenharia de Qualidade',
+    parentId: member?.parentId || (currentUser?.role === 'Coordenador' ? currentUser.id : null),
     focus: [],
     photo: '',
     ...member
@@ -71,13 +80,13 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, allMembers, onSave, o
             <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
               <i className="fa-solid fa-user-gear text-2xl"></i>
             </div>
-            <h3 className="text-2xl font-black uppercase tracking-tighter leading-none">Dados do<br/>Integrante</h3>
+            <h3 className="text-2xl font-black uppercase tracking-tighter leading-none">Dados do<br />Integrante</h3>
           </div>
           <button onClick={onClose} className="w-12 h-12 rounded-full hover:bg-white/10 flex items-center justify-center transition-all">
             <i className="fa-solid fa-times text-2xl"></i>
           </button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-10 space-y-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
           <div className="flex flex-col items-center gap-6">
             <div className="relative w-36 h-36 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
@@ -137,10 +146,18 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, allMembers, onSave, o
                     value={formData.parentId || ''}
                     onChange={(e) => setFormData({ ...formData, parentId: e.target.value || null })}
                     className={`w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-${!isEditing ? 'orange-500' : 'slate-800'} transition-all appearance-none text-slate-800`}
+                    disabled={currentUser?.role === 'Coordenador'} // ← Coordenador não pode mudar
                   >
                     <option value="">Nenhum (Topo)</option>
                     {allMembers
-                      .filter(m => m.id !== formData.id)
+                      .filter(m => {
+                        // Coordenador só pode escolher ele mesmo como parent
+                        if (currentUser?.role === 'Coordenador') {
+                          return m.id === currentUser.id;
+                        }
+                        // Admin/Gerente pode escolher qualquer um
+                        return m.id !== formData.id;
+                      })
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(m => (
                         <option key={m.id} value={m.id}>{m.name}</option>
@@ -157,9 +174,16 @@ const MemberModal: React.FC<MemberModalProps> = ({ member, allMembers, onSave, o
                   type="text"
                   value={formData.department}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className={`w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 outline-none focus:border-${!isEditing ? 'orange-500' : 'slate-800'} transition-all font-bold text-slate-800`}
+                  className={`w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 outline-none focus:border-${!isEditing ? 'orange-500' : 'slate-800'} transition-all font-bold text-slate-800 ${currentUser?.role === 'Coordenador' ? 'bg-slate-100 text-slate-500' : ''}`}
                   placeholder="Ex: Qualidade"
+                  disabled={currentUser?.role === 'Coordenador'}
+                  title={currentUser?.role === 'Coordenador' ? 'Coordenadores só podem adicionar ao seu próprio departamento' : undefined}
                 />
+                {currentUser?.role === 'Coordenador' && (
+                  <p className="text-[9px] text-orange-500 mt-1 font-bold">
+                    ⓘ Coordenadores só podem adicionar ao departamento: {currentUser.departments[0]}
+                  </p>
+                )}
               </div>
             </div>
 

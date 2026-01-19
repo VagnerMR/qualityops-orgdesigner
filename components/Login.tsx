@@ -16,22 +16,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
       // Usar o serviço de autenticação do Supabase
       const user = await authService.login(username, password);
-      
+
       if (user) {
-        // Verificar se precisa trocar senha (compatibilidade)
-        const savedPasswords = JSON.parse(localStorage.getItem('qualityops_passwords') || '{}');
-        const hasCustomPassword = !!savedPasswords[username];
-        
-        const finalUser = { 
-          ...user, 
-          needsPasswordChange: hasCustomPassword ? false : user.needsPasswordChange
-        };
-        
-        onLogin(finalUser);
+        // PASSO CRÍTICO: SIMPLESMENTE passar o user como veio do backend
+        // O campo needsPasswordChange já deve vir correto do Supabase
+        onLogin(user);
       } else {
         setError('Credenciais inválidas. Verifique usuário e senha.');
       }
@@ -57,7 +50,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <i className="fa-solid fa-users-viewfinder text-3xl"></i>
             </div>
             <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter text-center leading-none">
-              Viemar<br/>
+              Viemar<br />
               <span class="text-orange-500 text-lg tracking-widest">SmartOrg</span>
             </h1>
             <p className="text-slate-400 text-xs font-bold text-center mt-4 px-6">
