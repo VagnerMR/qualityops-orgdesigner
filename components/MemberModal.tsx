@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { TeamMember, User } from '../types';
 
@@ -19,15 +18,15 @@ const MemberModal: React.FC<MemberModalProps> = ({
   onDelete,
   onClose,
   isEditing,
-  currentUser  // ← apenas esta linha, sem nada depois
+  currentUser
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Partial<TeamMember>>({
     name: '',
     role: '',
     email: '',
-    department: currentUser?.departments[0] || 'Engenharia de Qualidade',
-    parentId: member?.parentId || (currentUser?.role === 'Coordenador' ? currentUser.id : null),
+    department: 'Qualidade', // ⬅️ Valor padrão
+    parentId: null, // ⬅️ Simplificado
     focus: [],
     photo: '',
     ...member
@@ -41,6 +40,15 @@ const MemberModal: React.FC<MemberModalProps> = ({
     'Analista de Qualidade',
     'Técnico de Qualidade',
     'Inspetor de Qualidade'
+  ];
+
+  // ⬇️ NOVA: Lista de departamentos fixos
+  const departments = [
+    'Conformação',
+    'Elastômero',
+    'Usinagem',
+    'Montagem',
+    'Qualidade'
   ];
 
   useEffect(() => {
@@ -146,18 +154,10 @@ const MemberModal: React.FC<MemberModalProps> = ({
                     value={formData.parentId || ''}
                     onChange={(e) => setFormData({ ...formData, parentId: e.target.value || null })}
                     className={`w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:border-${!isEditing ? 'orange-500' : 'slate-800'} transition-all appearance-none text-slate-800`}
-                    disabled={currentUser?.role === 'Coordenador'} // ← Coordenador não pode mudar
                   >
                     <option value="">Nenhum (Topo)</option>
                     {allMembers
-                      .filter(m => {
-                        // Coordenador só pode escolher ele mesmo como parent
-                        if (currentUser?.role === 'Coordenador') {
-                          return m.id === currentUser.id;
-                        }
-                        // Admin/Gerente pode escolher qualquer um
-                        return m.id !== formData.id;
-                      })
+                      .filter(m => m.id !== formData.id) // Não pode reportar a si mesmo
                       .sort((a, b) => a.name.localeCompare(b.name))
                       .map(m => (
                         <option key={m.id} value={m.id}>{m.name}</option>
@@ -168,22 +168,23 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 </div>
               </div>
 
+              {/* ⬇️ NOVO: Departamento como select */}
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 px-1">Departamento</label>
-                <input
-                  type="text"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className={`w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 outline-none focus:border-${!isEditing ? 'orange-500' : 'slate-800'} transition-all font-bold text-slate-800 ${currentUser?.role === 'Coordenador' ? 'bg-slate-100 text-slate-500' : ''}`}
-                  placeholder="Ex: Qualidade"
-                  disabled={currentUser?.role === 'Coordenador'}
-                  title={currentUser?.role === 'Coordenador' ? 'Coordenadores só podem adicionar ao seu próprio departamento' : undefined}
-                />
-                {currentUser?.role === 'Coordenador' && (
-                  <p className="text-[9px] text-orange-500 mt-1 font-bold">
-                    ⓘ Coordenadores só podem adicionar ao departamento: {currentUser.departments[0]}
-                  </p>
-                )}
+                <div className="relative">
+                  <select
+                    required
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    className={`w-full bg-slate-50 border-2 border-slate-50 rounded-2xl px-6 py-4 outline-none focus:border-${!isEditing ? 'orange-500' : 'slate-800'} transition-all font-bold text-slate-800 appearance-none`}
+                  >
+                    <option value="" disabled>Selecione um departamento...</option>
+                    {departments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                  <i className="fa-solid fa-chevron-down absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
+                </div>
               </div>
             </div>
 

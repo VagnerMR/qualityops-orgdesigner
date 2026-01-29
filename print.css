@@ -1,0 +1,207 @@
+/* =========================================================
+   IMPRESSÃO/PDF - VERSÃO SIMPLIFICADA E TESTADA
+   ========================================================= */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 15mm 10mm;
+  }
+
+  body,
+  html,
+  #root {
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Esconder elementos da interface */
+  .no-print,
+  .sidebar,
+  header,
+  footer,
+  button {
+    display: none !important;
+  }
+
+  /* Container principal */
+  #root {
+    position: relative !important;
+    min-height: 297mm !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  /* Template de fundo (comentado por enquanto) */
+  /*
+  #root::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    background-image: url('data:image/png;base64,SEU_BASE64_AQUI');
+    background-size: contain;
+    background-position: center center;
+    background-repeat: no-repeat;
+    opacity: 0.05;
+    pointer-events: none;
+  }
+  */
+
+  /* Área principal */
+  main {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 297mm !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Container do organograma */
+  .relative {
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 280mm !important;
+    margin: 0 auto !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  /* SVG */
+  svg {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
+    background: transparent !important;
+    transform: scale(0.78) !important;
+    transform-origin: top center !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Grupo principal */
+  .main-group {
+    transform: translate(0, 50px) scale(1) !important;
+  }
+
+  /* Melhorias de texto */
+  text {
+    font-family: Arial, sans-serif !important;
+    font-weight: 700 !important;
+    fill: #000000 !important;
+  }
+
+  text[fill="#1e293b"] {
+    font-weight: 900 !important;
+    font-size: 14px !important;
+  }
+
+  text[fill="#f97316"],
+  text[fill="#94a3b8"] {
+    font-weight: 600 !important;
+    font-size: 11px !important;
+    fill: #333333 !important;
+  }
+
+  /* Cards */
+  .org-node rect:first-of-type {
+    fill: white !important;
+    fill-opacity: 0.95 !important;
+    stroke: #666666 !important;
+    stroke-width: 1.5px !important;
+  }
+
+  /* Linhas */
+  .org-link {
+    stroke: #444444 !important;
+    stroke-width: 2px !important;
+    opacity: 0.9 !important;
+  }
+
+  /* Remover animações */
+  .transition-all,
+  .animate-pulse {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* =========================================================
+   IMPRESSÃO DE ÁREA SELECIONADA
+   ========================================================= */
+  .print-area {
+    position: absolute !important;
+    overflow: visible !important;
+  }
+
+  .print-area svg {
+    transform: none !important;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  /* Indicador visual da área selecionada */
+  .selected-area-indicator {
+    position: fixed;
+    border: 2px dashed #f97316;
+    background: rgba(249, 115, 22, 0.05);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* Estilos para o modal de seleção */
+  .print-selector-modal {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Adicione ao final do print.css */
+  .selection-box.printing {
+    animation: printPulse 0.3s ease-in-out 2;
+    border-color: #22c55e !important;
+    background-color: rgba(34, 197, 94, 0.2) !important;
+  }
+
+  @keyframes printPulse {
+
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    50% {
+      transform: scale(1.02);
+    }
+  }
+
+  .print-selected-btn:disabled {
+    cursor: not-allowed;
+  }
+
+  .print-selected-btn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+  }
+}

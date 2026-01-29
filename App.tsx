@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
-import OrgChart, { OrgChartRef } from './components/OrgChart';
+import OrgChart, { OrgChartRef } from './components/OrgChart'; // ⬅ Esta importação precisa da NOVA interface
 import MemberModal from './components/MemberModal';
 import Login from './components/Login';
 import ChangePassword from './components/ChangePassword';
@@ -12,10 +12,13 @@ import {
   historyService,
   userService
 } from './services/supabaseClient';
+import './print.css';
+import PrintAreaSelector from './components/PrintAreaSelector';
+import { backgroundImage } from './backgroundImage';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [members, setMembers] = useState<TeamMember[]>([]); // VAZIO inicialmente
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [lastSavedMembers, setLastSavedMembers] = useState<TeamMember[]>([]);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
@@ -28,9 +31,32 @@ const App: React.FC = () => {
   const [maxVisibleLevel, setMaxVisibleLevel] = useState<number>(5);
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPrintAreaSelecting, setIsPrintAreaSelecting] = useState(false);
+  const [selectedPrintArea, setSelectedPrintArea] = useState<DOMRect | null>(null);
 
+  // CORREÇÃO: Declare as refs primeiro, sem tentar usá-las
   const orgChartRef = useRef<OrgChartRef>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // CORREÇÃO: Remova estas linhas - você usará no momento certo
+  // const svgInfo = orgChartRef.current?.getSVGElement(); // ⛔ REMOVER
+  // const svgElement = svgInfo?.svgElement; // ⛔ REMOVER
+  // const getCurrentTransform = svgInfo?.getCurrentTransform; // ⛔ REMOVER
+  // const orgChartSVGRef = useRef<SVGSVGElement>(null); // ⛔ REMOVER (não é mais necessário)
+
+  // FUNÇÃO AUXILIAR: Para obter o SVG quando necessário
+  const getOrgChartSVG = () => {
+    if (!orgChartRef.current) return null;
+    const svgInfo = orgChartRef.current.getSVGElement();
+    return svgInfo.svgElement;
+  };
+
+  // FUNÇÃO AUXILIAR: Para obter transformações quando necessário
+  const getOrgChartTransform = () => {
+    if (!orgChartRef.current) return { x: 0, y: 0, k: 1 };
+    const svgInfo = orgChartRef.current.getSVGElement();
+    return svgInfo.getCurrentTransform();
+  };
 
   // Departamentos únicos para o cadastro
   const availableDepartments = useMemo(() => {
@@ -85,24 +111,34 @@ const App: React.FC = () => {
   const canEditMember = (member: TeamMember | null, currentUser: User): boolean => {
     if (!currentUser) return false;
 
-    // Admin pode tudo
+    // 1. Admin pode tudo
     if (currentUser.role === 'Admin') return true;
 
-    // Gerente pode editar todos do departamento
+    // 2. Usuários específicos (Paulo, Christian, Tiago, Maicon) podem editar sua sub-árvore completa
+    const privilegedUsers = ['paulo', 'christian', 'tiago', 'maicon'];
+
+    if (privilegedUsers.includes(currentUser.username.toLowerCase())) {
+      // Se for adicionar novo membro
+      if (!member) return true;
+
+      // Verificar se o membro está na sub-árvore do usuário
+      return isInSubtree(member.id, currentUser.id, members);
+    }
+
+    // 3. Gerente pode editar todos do departamento
     if (currentUser.role === 'Gerente') {
       if (!member) return true; // Adicionar novo
       return currentUser.departments.includes('*') ||
         currentUser.departments.includes(member.department);
     }
 
-    // Coordenador só pode editar sua sub-árvore
+    // 4. Coordenador só pode editar sua sub-árvore
     if (currentUser.role === 'Coordenador') {
       if (!member) return true; // Pode adicionar subordinados
-
-      // Verificar se o membro está na hierarquia do coordenador
       return isInSubtree(member.id, currentUser.id, members);
     }
 
+    // 5. Outros usuários não podem editar
     return false;
   };
 
@@ -116,17 +152,38 @@ const App: React.FC = () => {
   const filteredMembers = useMemo(() => {
     if (!currentUser) return [];
 
-    // 1. Filtragem por Nível de Visualização (mantém)
+    // 1. Filtragem por Nível de Visualização
     let visibleByLevel = members.filter(m => getRoleLevel(m.role) <= maxVisibleLevel);
 
-    // 2. NOVA LÓGICA: Hierarquia por role
+    // 2. Se for usuário privilegiado, mostra toda sua sub-árvore
+    const privilegedUsers = ['paulo', 'christian', 'tiago', 'maicon'];
+
+    if (privilegedUsers.includes(currentUser.username.toLowerCase())) {
+      const getUserSubtree = (userId: string): TeamMember[] => {
+        const result = new Set<string>();
+
+        const collectSubordinates = (managerId: string) => {
+          result.add(managerId);
+
+          const directSubordinates = visibleByLevel.filter(m => m.parentId === managerId);
+          directSubordinates.forEach(sub => {
+            collectSubordinates(sub.id);
+          });
+        };
+
+        collectSubordinates(currentUser.id);
+        return visibleByLevel.filter(m => result.has(m.id));
+      };
+
+      return getUserSubtree(currentUser.id);
+    }
+
+    // 3. Resto da lógica original para outros tipos de usuário
     if (currentUser.role === 'Admin') {
-      // Admin vê tudo
       return visibleByLevel;
     }
 
     if (currentUser.role === 'Gerente') {
-      // Gerente vê todos do(s) seu(s) departamento(s)
       if (currentUser.departments.includes('*')) {
         return visibleByLevel;
       }
@@ -136,34 +193,25 @@ const App: React.FC = () => {
     }
 
     if (currentUser.role === 'Coordenador') {
-      // Coordenador vê toda sua SUB-ÁRVORE
       const getUserSubtree = (userId: string): TeamMember[] => {
         const result = new Set<string>();
 
-        // Função recursiva para coletar subordinados
         const collectSubordinates = (managerId: string) => {
           result.add(managerId);
-
-          // Encontrar subordinados diretos
           const directSubordinates = visibleByLevel.filter(m => m.parentId === managerId);
-
-          // Para cada subordinado, coletar seus subordinados também
           directSubordinates.forEach(sub => {
             collectSubordinates(sub.id);
           });
         };
 
-        // Começar do coordenador
         collectSubordinates(userId);
-
-        // Retornar todos os membros da sub-árvore
         return visibleByLevel.filter(m => result.has(m.id));
       };
 
       return getUserSubtree(currentUser.id);
     }
 
-    // Para outros roles (Analista, Visualizador) - ver apenas si mesmo?
+    // Para outros roles - ver apenas si mesmo
     return visibleByLevel.filter(m => m.id === currentUser.id);
   }, [members, currentUser, maxVisibleLevel]);
 
@@ -295,10 +343,18 @@ const App: React.FC = () => {
 
   const handleAddMember = () => {
     if (!isEditing) return;
-    if (!canEditMember(null, currentUser)) {
+
+    // Permite adicionar se for Admin, Gerente, Coordenador OU usuário privilegiado
+    const canAdd = currentUser?.role === 'Admin' ||
+      currentUser?.role === 'Gerente' ||
+      currentUser?.role === 'Coordenador' ||
+      ['paulo', 'christian', 'tiago', 'maicon'].includes(currentUser?.username?.toLowerCase() || '');
+
+    if (!canAdd) {
       alert('Você não tem permissão para adicionar integrantes');
       return;
     }
+
     setModalMode('add');
     setSelectedMember(null);
     setIsModalOpen(true);
@@ -317,11 +373,16 @@ const App: React.FC = () => {
 
   const handleAddSubordinate = (parentId: string) => {
     if (!isEditing) return;
+
     const parentMember = members.find(m => m.id === parentId);
-    if (!parentMember || !canEditMember(parentMember, currentUser)) {
+    if (!parentMember) return;
+
+    // Verifica se o usuário pode editar este membro pai
+    if (!canEditMember(parentMember, currentUser)) {
       alert('Você não tem permissão para adicionar subordinados aqui');
       return;
     }
+
     setModalMode('add');
     setSelectedMember({ parentId } as any);
     setIsModalOpen(true);
@@ -383,8 +444,217 @@ const App: React.FC = () => {
     }
   };
 
+  // ... imports e estados anteriores
+
   const handleExportPDF = () => {
-    window.print();
+    const svgElement = document.querySelector('#org-chart-container svg') as SVGSVGElement;
+    if (!svgElement) return;
+
+    const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
+    clonedSvg.style.backgroundColor = 'transparent';
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>QualityOps - Organograma</title>
+          <style>
+            @page { 
+              size: landscape; 
+              margin: 8mm 8mm 8mm 8mm; /* Margens aumentadas para dar mais espaço */
+            }
+            body { 
+              margin: 0; 
+              padding: 0;
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              min-height: 100vh;
+              min-width: 100vw;
+              background-color: white;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            /* Container principal com borda e fundo */
+            .print-container {
+              box-sizing: border-box;
+              width: 100%;
+              height: 100%;
+              border: 6px solid #f97316 !important; /* Borda um pouco mais fina */
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              position: relative;
+              padding: 20px; /* Mais espaço interno */
+              
+              /* Fundo com a imagem - REDUZIDA EM 0% (100% do tamanho original) */
+              background-image: url('${backgroundImage}');
+              background-size: 100% 100%; /* REDUZIDO EM 0% */
+              background-position: center center;
+              background-repeat: no-repeat;
+              background-origin: padding-box; /* Mantém dentro do padding */
+            }
+            /* Container para escalar o organograma */
+            .chart-container {
+              width: 95%; /* Também reduzido 5% */
+              height: 95%; /* Também reduzido 5% */
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background-color: transparent;
+            }
+            svg { 
+              width: 100%;
+              height: 100%;
+              max-width: 100%;
+              max-height: 100%;
+              display: block;
+              background-color: transparent !important;
+            }
+            @media print {
+              .print-container {
+                /* Garantir borda laranja na impressão */
+                border: 8px solid #f97316 !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-container">
+            <div class="chart-container">
+              ${clonedSvg.outerHTML}
+            </div>
+          </div>
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  /**
+   * Lógica Principal de Impressão Vetorial
+   * Recebe as coordenadas (bbox) já ajustadas para o tamanho real do SVG
+   */
+
+  const handlePrintAreaSelected = (bbox: DOMRect) => {
+    setIsPrintAreaSelecting(false);
+
+    const originalSvg = document.querySelector('#org-chart-container svg') as SVGSVGElement;
+    if (!originalSvg) return;
+
+    // CLONAR o SVG MAS REMOVER AS TRANSFORMAÇÕES DO D3
+    const clonedSvg = originalSvg.cloneNode(true) as SVGSVGElement;
+
+    // ENCONTRAR O GRUPO PRINCIPAL (que contém as transformações do D3)
+    const mainGroup = clonedSvg.querySelector('g');
+    if (mainGroup) {
+      // RESETAR as transformações para evitar deslocamento
+      mainGroup.setAttribute('transform', '');
+
+      // Aplicar APENAS o viewBox baseado na área selecionada
+      // Isso garante que a imagem saia centralizada e correta
+      clonedSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+
+      // Remover qualquer transformação inline
+      clonedSvg.style.transform = '';
+      clonedSvg.style.transformOrigin = '';
+    }
+
+    // Limpar estilos problemáticos
+    clonedSvg.style.background = 'transparent';
+    clonedSvg.style.width = '100%';
+    clonedSvg.style.height = '100%';
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>QualityOps - Impressão</title>
+          <style>
+            @page { 
+              size: landscape; 
+              margin: 15mm 15mm 15mm 15mm;
+            }
+            body { 
+              margin: 0; 
+              padding: 0;
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              height: 100vh; 
+              width: 100vw;
+              background-color: white;
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .print-frame {
+              border: 12px solid #f97316 !important;
+              box-sizing: border-box;
+              width: 100%;
+              height: 100%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 20px;
+              background-color: white;
+              background-image: url('${backgroundImage}');
+              background-size: 95% 95%;
+              background-position: center;
+              background-repeat: no-repeat;
+            }
+            .chart-area {
+              width: 95%;
+              height: 95%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            svg {
+              width: 100%;
+              height: 100%;
+              max-width: 100%;
+              max-height: 100%;
+              display: block;
+            }
+            @media print {
+              .print-frame {
+                border: 12px solid #f97316 !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-frame">
+            <div class="chart-area">
+              ${clonedSvg.outerHTML}
+            </div>
+          </div>
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                setTimeout(() => window.close(), 100);
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   const handleOptimizeLayout = () => {
@@ -455,31 +725,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleImportAI = async (suggestions: AISuggestion[]) => {
-    const newMembersFromAI = suggestions.map(s => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: `VAGA: ${s.role}`,
-      role: s.role,
-      email: '',
-      department: currentUser?.departments[0] === '*' ? 'Engenharia de Qualidade' : (currentUser?.departments[0] || 'Qualidade'),
-      parent_id: filteredMembers[0]?.id || null,
-      focus: s.responsibilities,
-      status: 'contratacao'
-    }));
-
-    // Salvar todos os novos membros
-    for (const member of newMembersFromAI) {
-      await teamService.saveMember(member as TeamMember);
-    }
-
-    // Atualizar lista
-    const updatedMembers = await teamService.getAllMembers();
-    setMembers(updatedMembers);
-
-    await addHistoryRecord('Importação IA', 'Novos papéis sugeridos pela inteligência artificial');
-    setIsEditing(true);
-  };
-
   useEffect(() => {
     if (import.meta.env.DEV) {
       (window as any).members = members;
@@ -514,7 +759,6 @@ const App: React.FC = () => {
       <div className="no-print h-full flex shrink-0">
         <Sidebar
           onAddMember={handleAddMember}
-          onImportAI={handleImportAI}
           onOpenHistory={() => setShowHistory(true)}
           onOpenUserManagement={() => setIsUserModalOpen(true)}
           onLogout={handleLogout}
@@ -586,6 +830,7 @@ const App: React.FC = () => {
               <i className="fa-solid fa-file-pdf"></i>
             </button>
 
+
             <div className="w-px h-8 bg-slate-100 mx-2"></div>
 
             {!isEditing ? (
@@ -643,7 +888,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 relative bg-[#f8fafc]">
+        <div className="flex-1 relative bg-[#f8fafc] print:bg-transparent">
           <OrgChart
             ref={orgChartRef}
             members={filteredMembers}
@@ -652,6 +897,8 @@ const App: React.FC = () => {
             onDeleteMember={handleDeleteMember}
             isEditing={isEditing}
           />
+
+          {/* FIM DA INSERÇÃO */}
 
           {showHistory && (
             <div className="absolute inset-y-0 right-0 w-[480px] bg-white shadow-2xl z-40 border-l border-slate-100 flex flex-col animate-slide-in">
@@ -706,6 +953,15 @@ const App: React.FC = () => {
           onSave={handleSaveUser}
           existingUsers={allSystemUsers}
           departments={availableDepartments}
+        />
+      )}
+
+      {isPrintAreaSelecting && (
+        <PrintAreaSelector
+          getSVGElement={getOrgChartSVG}
+          getTransform={getOrgChartTransform}
+          onAreaSelected={handlePrintAreaSelected}
+          onCancel={() => setIsPrintAreaSelecting(false)}
         />
       )}
     </div>

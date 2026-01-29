@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "vercel-build": "vite build" 
+    "vercel-build": "vite build"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@google/genai": "^1.34.0",
     "@supabase/supabase-js": "^2.78.0",
     "d3": "^7.9.0",
+    "html2canvas": "^1.4.1",
+    "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },

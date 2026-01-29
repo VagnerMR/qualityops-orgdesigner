@@ -3,6 +3,28 @@ import React, { useMemo, useRef, useEffect, useState, useImperativeHandle, forwa
 import * as d3 from 'd3';
 import { TeamMember } from '../types';
 
+// Adicione esta função após os imports e antes do componente
+const extractTransform = (transformString: string | null) => {
+  if (!transformString) return { x: 0, y: 0, k: 1 };
+
+  let x = 0, y = 0, k = 1;
+
+  // Extrair translate(x,y)
+  const translateMatch = transformString.match(/translate\(([^,]+),([^)]+)\)/);
+  if (translateMatch) {
+    x = parseFloat(translateMatch[1]);
+    y = parseFloat(translateMatch[2]);
+  }
+
+  // Extrair scale(k)
+  const scaleMatch = transformString.match(/scale\(([^)]+)\)/);
+  if (scaleMatch) {
+    k = parseFloat(scaleMatch[1]);
+  }
+
+  return { x, y, k };
+};
+
 interface OrgChartProps {
   members: TeamMember[];
   onSelectMember: (member: TeamMember) => void;
@@ -13,6 +35,10 @@ interface OrgChartProps {
 
 export interface OrgChartRef {
   resetLayout: () => void;
+  getSVGElement: () => {
+    svgElement: SVGSVGElement | null;
+    getCurrentTransform: () => { x: number; y: number; k: number };
+  };
 }
 
 const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMember, onAddSubordinate, onDeleteMember, isEditing }, ref) => {
@@ -25,7 +51,7 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
 
   // Função auxiliar para determinar o nível com base no cargo
   const getRoleLevel = (role: string): number => {
-  const r = role.toLowerCase();
+    const r = role.toLowerCase();
     if (r.includes('gerente')) return 0;
     if (r.includes('coordenador')) return 1;
     if (r.includes('analista')) return 2;
@@ -34,19 +60,70 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
     return 5;
   };
 
-  useImperativeHandle(ref, () => ({
-    resetLayout: () => {
-      setDragOffsets({});
-      if (svgRef.current && containerRef.current && zoomRef.current) {
-        const width = containerRef.current.clientWidth;
-        const initialTransform = d3.zoomIdentity.translate((width / 2), 100).scale(0.55);
-        d3.select(svgRef.current)
-          .transition()
-          .duration(750)
-          .call(zoomRef.current.transform as any, initialTransform);
+  // No OrgChart.tsx, substitua o useImperativeHandle atual por este:
+  useImperativeHandle(ref, () => {
+    console.log('🔄 OrgChart ref expondo funções:', {
+      resetLayout: true,
+      getSVGElement: true
+    });
+
+    return {
+      resetLayout: () => {
+        setDragOffsets({});
+
+        if (svgRef.current && containerRef.current && zoomRef.current) {
+          const width = containerRef.current.clientWidth;
+          const initialTransform = d3.zoomIdentity
+            .translate(width / 2, 100)
+            .scale(0.55);
+
+          d3.select(svgRef.current)
+            .transition()
+            .duration(750)
+            .call(zoomRef.current.transform as any, initialTransform);
+        }
+      },
+
+      getSVGElement: () => {
+        // IMPORTANTE: Retornar tanto o elemento quanto as transformações atuais
+        const svg = svgRef.current;
+        if (!svg) return { svgElement: null, getCurrentTransform: () => ({ x: 0, y: 0, k: 1 }) };
+
+        // Obter as transformações atuais do grupo principal
+        const getCurrentTransform = () => {
+          const mainGroup = svg.querySelector('g.main-group');
+          if (!mainGroup) return { x: 0, y: 0, k: 1 };
+
+          const transform = mainGroup.getAttribute('transform');
+          if (!transform) return { x: 0, y: 0, k: 1 };
+
+          let x = 0, y = 0, k = 1;
+
+          // Extrair translate(x,y)
+          const translateMatch = transform.match(/translate\(([^,]+),([^)]+)\)/);
+          if (translateMatch) {
+            x = parseFloat(translateMatch[1]);
+            y = parseFloat(translateMatch[2]);
+          }
+
+          // Extrair scale(k)
+          const scaleMatch = transform.match(/scale\(([^)]+)\)/);
+          if (scaleMatch) {
+            k = parseFloat(scaleMatch[1]);
+          }
+
+          console.log('📐 Transformações atuais:', { x, y, k });
+          return { x, y, k };
+        };
+
+        console.log('📄 Retornando SVG element com transformações');
+        return {
+          svgElement: svg,
+          getCurrentTransform: getCurrentTransform
+        };
       }
-    }
-  }));
+    };
+  }, []);
 
   const root = useMemo(() => {
     if (members.length === 0) return null;
@@ -60,16 +137,16 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
       const stratify = d3.stratify<TeamMember>()
         .id(d => d.id)
         .parentId(d => d.parentId);
-      
+
       const hierarchy = stratify(safeMembers);
-      
-      const nodeWidth = 300; 
+
+      const nodeWidth = 300;
       const levelHeight = 320; // Espaçamento vertical fixo entre níveis
 
       const treeLayout = d3.tree<TeamMember>()
         .nodeSize([nodeWidth, levelHeight])
-        .separation((a, b) => (a.parent === b.parent ? 1.1 : 1.3)); 
-      
+        .separation((a, b) => (a.parent === b.parent ? 1.1 : 1.3));
+
       const treeData = treeLayout(hierarchy);
 
       // FORÇAR NÍVEIS HORIZONTAIS
@@ -113,10 +190,10 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
       const drag = d3.drag<SVGGElement, any>()
         .on('drag', (event, d) => {
           if (!d || !d.data || !d.data.id) return;
-          
+
           const id = d.data.id;
           const idsToMove = selectedIds.has(id) ? Array.from(selectedIds) : [id];
-          
+
           setDragOffsets(prev => {
             const next = { ...prev };
             idsToMove.forEach(mid => {
@@ -131,7 +208,7 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
 
       const allNodes = root.descendants();
       d3.selectAll<SVGGElement, any>('.org-node')
-        .each(function() {
+        .each(function () {
           const el = d3.select(this);
           const id = el.attr('data-id');
           const d = allNodes.find(n => n.id === id);
@@ -146,7 +223,7 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
   const handleNodeClick = (e: React.MouseEvent, id: string) => {
     if (!isEditing) return;
     e.stopPropagation();
-    
+
     if (e.shiftKey) {
       const next = new Set(selectedIds);
       if (next.has(id)) next.delete(id);
@@ -176,14 +253,23 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
     const sourceY = link.source.y + sdy + 120;
     const targetX = link.target.x + tdx;
     const targetY = link.target.y + tdy - 40;
-    
+
     const midY = (sourceY + targetY) / 2;
     return `M${sourceX},${sourceY} V${midY} H${targetX} V${targetY}`;
   };
 
   return (
-    <div ref={containerRef} onClick={clearSelection} className="w-full h-full bg-[#f8fafc] relative overflow-hidden cursor-grab active:cursor-grabbing print:bg-transparent no-print-bg">
-      <svg ref={svgRef} className="w-full h-full overflow-visible">
+    <div
+      id="org-chart-container"
+      ref={containerRef}
+      onClick={clearSelection}
+      className="w-full h-full bg-[#f8fafc] relative overflow-hidden cursor-grab active:cursor-grabbing"
+    >
+      <svg
+        ref={svgRef}
+        className="w-full h-full"
+        style={{ overflow: 'visible' }} // Garante que elementos fora da visão atual existam na DOM para serem clonados
+      >
         <defs>
           <clipPath id="nodeAvatarClip">
             <rect width="50" height="50" rx="16" />
@@ -200,6 +286,7 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
             </feMerge>
           </filter>
         </defs>
+        {/* O D3.js vai inserir o <g> do zoom aqui embaixo automaticamente */}
         <g className="main-group">
           {links.map((link, i) => (
             <path
@@ -216,14 +303,14 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
 
           {nodes.map((node) => {
             if (!node.id) return null;
-            
+
             const cardWidth = 240;
             const focusCount = (node.data.focus && node.data.focus.length) || 0;
             const cardHeight = focusCount > 0 ? (120 + Math.min(focusCount, 4) * 20 + 20) : 120;
             const dx = dragOffsets[node.id]?.dx || 0;
             const dy = dragOffsets[node.id]?.dy || 0;
             const isSelected = selectedIds.has(node.id);
-            
+
             return (
               <g
                 key={`node-${node.id}`}
@@ -260,14 +347,14 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
                 <rect width={cardWidth} height="8" rx="4" fill={!isEditing ? "#f97316" : "#94a3b8"} />
 
                 <g transform="translate(15, 25)">
-                   <rect width="50" height="50" rx="16" fill="#f8fafc" stroke="#f1f5f9" strokeWidth="1" />
-                   {node.data.photo ? (
-                     <image href={node.data.photo} width="50" height="50" clipPath="url(#nodeAvatarClip)" preserveAspectRatio="xMidYMid slice" />
-                   ) : (
-                     <text x="25" y="32" textAnchor="middle" fontSize="20" fontWeight="900" fill="#cbd5e1" className="uppercase">
-                       {node.data.name.charAt(0)}
-                     </text>
-                   )}
+                  <rect width="50" height="50" rx="16" fill="#f8fafc" stroke="#f1f5f9" strokeWidth="1" />
+                  {node.data.photo ? (
+                    <image href={node.data.photo} width="50" height="50" clipPath="url(#nodeAvatarClip)" preserveAspectRatio="xMidYMid slice" />
+                  ) : (
+                    <text x="25" y="32" textAnchor="middle" fontSize="20" fontWeight="900" fill="#cbd5e1" className="uppercase">
+                      {node.data.name.charAt(0)}
+                    </text>
+                  )}
                 </g>
 
                 <g transform="translate(75, 42)">
@@ -300,15 +387,15 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
                       <circle r="20" fill="#94a3b8" className="shadow-lg hover:fill-slate-700 transition-colors" />
                       <text textAnchor="middle" dy=".35em" fill="white" fontSize="24" fontWeight="900">+</text>
                     </g>
-                    
+
                     <g transform={`translate(${cardWidth / 2 - 45}, ${cardHeight - 50})`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onDeleteMember(node.id!); }}>
                       <rect width="90" height="36" rx="18" fill="white" stroke="#fee2e2" strokeWidth="2.5" className="shadow-lg hover:fill-rose-50 transition-colors" />
                       <text x="45" y="23" textAnchor="middle" fill="#ef4444" fontSize="11" fontWeight="900" className="uppercase tracking-widest">EXCLUIR</text>
                     </g>
-                    
+
                     <g transform={`translate(30, ${cardHeight - 30})`} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onSelectMember(node.data); }}>
-                       <circle r="20" fill="white" stroke="#f1f5f9" strokeWidth="2.5" className="shadow-lg hover:border-slate-300 transition-colors" />
-                       <text textAnchor="middle" dy=".35em" fill="#64748b" className="fa-solid fa-pen" style={{fontFamily: '"Font Awesome 6 Free"', fontWeight: 900, fontSize: '12px'}}>&#xf304;</text>
+                      <circle r="20" fill="white" stroke="#f1f5f9" strokeWidth="2.5" className="shadow-lg hover:border-slate-300 transition-colors" />
+                      <text textAnchor="middle" dy=".35em" fill="#64748b" className="fa-solid fa-pen" style={{ fontFamily: '"Font Awesome 6 Free"', fontWeight: 900, fontSize: '12px' }}>&#xf304;</text>
                     </g>
                   </g>
                 )}
@@ -317,7 +404,7 @@ const OrgChart = forwardRef<OrgChartRef, OrgChartProps>(({ members, onSelectMemb
           })}
         </g>
       </svg>
-      
+
       <div className="absolute bottom-10 left-10 flex flex-col gap-4 no-print animate-in fade-in slide-in-from-left duration-700">
         <div className="group bg-white/90 backdrop-blur-md p-2 rounded-[28px] border border-white shadow-2xl flex items-center gap-0 hover:gap-5 transition-all duration-500 max-w-[56px] hover:max-w-md overflow-hidden cursor-help">
           <div className="w-10 h-10 bg-slate-100 rounded-full flex shrink-0 items-center justify-center text-slate-400 group-hover:bg-orange-100 group-hover:text-orange-500 transition-colors duration-300">
